@@ -58,7 +58,7 @@ fn main() -> std::io::Result<()> {
             let footer_index = footer_start + footer_index;
 
             // Bounds checks
-            if header_index < 0 || footer_index >= src_data.len() {
+            if  footer_index >= src_data.len() {
                 println!("Warning: Header or footer found outside data bounds.");
                 break; // Exit to prevent potential out-of-bounds access
             }
