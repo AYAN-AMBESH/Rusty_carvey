@@ -6,17 +6,44 @@ static PNG_FOOTER: [u8; 12] = [
 
 /// An interator for the found PNGs.
 pub struct PngIter<'a> {
-    src_data: &'a Vec<u8>,
+    src_data: &'a [u8],
     position: usize,
 }
 
 impl<'a> PngIter<'a> {
-    pub fn new(src_data: &'a Vec<u8>) -> Self {
+    pub fn new(src_data: &'a [u8]) -> Self {
         PngIter {
             src_data,
             position: 0,
         }
     }
+}
+
+fn find_header(position: &mut usize, src_data: &[u8]) -> Option<usize> {
+
+    while *position < src_data.len() {
+        if src_data[*position..].starts_with(&PNG_HEADER) {
+            return Some(*position + 8);
+        }
+        *position += 1;
+    }
+
+    None
+}
+
+fn find_footer(footer_start: usize, src_data: &[u8]) -> Option<usize> {
+    let mut footer_index = 0;
+
+    while footer_start + footer_index < src_data.len() {
+        if src_data[footer_start + footer_index..].starts_with(&PNG_FOOTER) {
+            footer_index += 12; // Adjust for footer's length
+            return Some(footer_index);
+        } else {
+            footer_index += 1;
+        }
+    }
+
+    None
 }
 
 impl<'a> Iterator for PngIter<'a> {
@@ -26,44 +53,18 @@ impl<'a> Iterator for PngIter<'a> {
         let src_data = self.src_data;
     
         loop {
-            let mut header_found = false;
-            let mut footer_start = 0;
+            let footer_start = match find_header(&mut self.position, src_data) {
+                Some(x) => x,
+                None => break,
+            };
+            self.position += 1;
 
-            while self.position < src_data.len() && !header_found {
-                if src_data[self.position..].starts_with(&PNG_HEADER) {
-                    header_found = true;
-                    footer_start = self.position + 8;
-                }
-                self.position += 1;
-            }
-
-            if !header_found {
-                break; // Exit if no header is found
-            }
-
-            let mut footer_found = false;
-            let mut footer_index = 0;
-
-            while footer_start + footer_index < src_data.len() && !footer_found {
-                if src_data[footer_start + footer_index..].starts_with(&PNG_FOOTER) {
-                    footer_found = true;
-                    footer_index += 12; // Adjust for footer's length
-                } else {
-                    footer_index += 1;
-                }
-
-                // Break the loop if footer search reaches the end of data
-                if footer_start + footer_index >= src_data.len() {
-                    break;
-                }
-            }
-
-            if footer_found {
+            if let Some(footer_index) = find_footer(footer_start, src_data) {
                 let header_index = footer_start - 8; // Use footer_start for header index
                 let footer_index = footer_start + footer_index;
 
                 // Bounds checks
-                if  footer_index >= src_data.len() {
+                if footer_index >= src_data.len() {
                     eprintln!("Warning: Header or footer found outside data bounds.");
                     break; // Exit to prevent potential out-of-bounds access
                 }
