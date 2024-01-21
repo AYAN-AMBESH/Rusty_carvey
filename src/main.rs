@@ -1,14 +1,16 @@
 use std::fs::{self, File};
 use std::io::prelude::*;
+use std::env;
+
+mod pngiter;
+use pngiter::*;
 
 fn main() -> std::io::Result<()> {
     // Set paths for source and destination files
-    let src_file_path = "/home/draco/Documents/Rusty_carvey/t1.dd";
+    let src_file_path = env::args().nth(1)
+        .expect("Usage: r u s t y c a r v e r   f i l e");
     let dst_directory = "carved_data";
 
-    // Define header and footer for PNG files
-    let png_header: [u8; 8] = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
-    let png_footer: [u8; 12] = [0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82];
 
     // Read the source file into a byte vector
     let mut src_data = Vec::new();
@@ -17,72 +19,48 @@ fn main() -> std::io::Result<()> {
     // Create a directory for the carved data
     fs::create_dir(dst_directory)?;
 
-    let mut position = 0;
-    let mut count = 0;
 
-    loop {
-        let mut header_found = false;
-        let mut footer_start = 0;
-
-        while position < src_data.len() && !header_found {
-            if src_data[position..].starts_with(&png_header) {
-                header_found = true;
-                footer_start = position + 8;
-            }
-            position += 1;
-        }
-
-        if !header_found {
-            break; // Exit if no header is found
-        }
-
-        let mut footer_found = false;
-        let mut footer_index = 0;
-
-        while footer_start + footer_index < src_data.len() && !footer_found {
-            if src_data[footer_start + footer_index..].starts_with(&png_footer) {
-                footer_found = true;
-                footer_index += 12; // Adjust for footer's length
-            } else {
-                footer_index += 1;
-            }
-
-            // Break the loop if footer search reaches the end of data
-            if footer_start + footer_index >= src_data.len() {
-                break;
-            }
-        }
-
-        if footer_found {
-            let header_index = footer_start - 8; // Use footer_start for header index
-            let footer_index = footer_start + footer_index;
-
-            // Bounds checks
-            if  footer_index >= src_data.len() {
-                println!("Warning: Header or footer found outside data bounds.");
-                break; // Exit to prevent potential out-of-bounds access
-            }
-
-            if header_index < footer_index {
-               
-                    count += 1;
-                    let dst_data = &src_data[header_index..footer_index + 1]; // Include the entire footer
-                    let dst_file_name = format!("{}/{}_{}.png", dst_directory, dst_directory, count);
-                    File::create(dst_file_name.clone())?.write_all(dst_data)?;
-                    println!("Carved: {}", dst_file_name);
-                
-            } else {
-                println!("Warning: Header found without a corresponding footer at position {}", header_index);
-            }
-
-            position = footer_index + 12; // Move to the position after the complete carved data
-        } else {
-            println!("Warning: Header found without a corresponding footer at position {}", position - 8);
-            position = footer_start; // Move to the next potential header position
-        }
+    for (count, dst_data) in PngIter::new(&src_data).enumerate() {
+        let dst_file_name = format!("{}/{}_{}.png", dst_directory, dst_directory, count + 1);
+        File::create(dst_file_name.clone())?.write_all(dst_data)?;
+        eprintln!("Carved: {}", dst_file_name);
     }
-
-    println!("Total carved files: {}", count);
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::pngiter::*;
+    use std::fs::File;
+    use std::io::prelude::*;
+    
+    static HASHES: [&'static str; 10] = [
+        "6d064466ccb4016905bba4d306b590dc71a04f7abce9abc0aad37de11271f9f0",
+        "fed0a48e48a1cd62a532b6021104cd50dfd36a3cac591a3c87df98148a5aeae4",
+        "ed36115b9a469beedf8e27508022a6295de1dc9514be3b39c124d9d4f14d7e88",
+        "d6864217e6a7d0279070d00cb8fed75be989f06ee01a7888674304a086aa6438",
+        "73bd5fd675d98432014a21365247d7c333b0f714e615b28d8f70feaaf9ad7a38",
+        "7df7563ce68ed355ac82af7e08e2a713cc8c8827fbb7b017ea6afc5de857af02",
+        "2fe41be9ad0fdc12b552bdc8db07a1b6db526abcf8dc9daede71158da445f485",
+        "1350c075215cf3dcbbf9d4df6cb58ac28a0f2e741f010cb5f72e1c73e32decfe",
+        "3bda1c6ae5766e5cd767ef54c505f3b8adfdafaa0db02e6c74de50343fdbb2e7",
+        "04fd8a8d7d621f082a393022163e89f59b852aa65499a7fbd477c6deaae84eaf",
+    ];
+
+    #[test]
+    fn t1dd() {
+        let mut src_data = Vec::new();
+        File::open("t1.dd")
+            .expect("Couldn't open ./t1.dd")
+            .read_to_end(&mut src_data)
+            .expect("Couldn't read ./t1.dd");
+        
+        for (count, dst_data) in PngIter::new(&src_data).enumerate() {
+            let hash = sha256::digest(dst_data);
+            println!("{} is {hash}", count + 1);
+            assert_eq!(HASHES[count], hash);
+        }
+    }
+}
+
