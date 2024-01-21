@@ -1,9 +1,11 @@
 use std::fs::{self, File};
 use std::io::prelude::*;
+use std::env;
 
 fn main() -> std::io::Result<()> {
     // Set paths for source and destination files
-    let src_file_path = "/home/draco/Documents/Rusty_carvey/t1.dd";
+    let src_file_path = env::args().nth(1)
+        .expect("Usage: r u s t y c a r v e r   f i l e");
     let dst_directory = "carved_data";
 
     // Define header and footer for PNG files
