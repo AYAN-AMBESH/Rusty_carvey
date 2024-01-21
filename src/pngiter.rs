@@ -63,20 +63,9 @@ impl<'a> Iterator for PngIter<'a> {
                 let header_index = footer_start - 8; // Use footer_start for header index
                 let footer_index = footer_start + footer_index;
 
-                // Bounds checks
-                if footer_index >= src_data.len() {
-                    eprintln!("Warning: Header or footer found outside data bounds.");
-                    break; // Exit to prevent potential out-of-bounds access
-                }
-
-                if header_index < footer_index {
-                    // Include the entire footer
-                    return Some(&src_data[header_index..footer_index + 1]);
-                } else {
-                    eprintln!("Warning: Header found without a corresponding footer at position {}", header_index);
-                }
-
                 self.position = footer_index + 12; // Move to the position after the complete carved data
+
+                return Some(&src_data[header_index..footer_index]);
             } else {
                 eprintln!("Warning: Header found without a corresponding footer at position {}", self.position - 8);
                 self.position = footer_start; // Move to the next potential header position
